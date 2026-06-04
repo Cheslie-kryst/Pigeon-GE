@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 短视频脚本生成器</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d0f;
+    --bg2: #141416;
+    --bg3: #1a1a1e;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #f0ede8;
+    --text2: #9a9690;
+    --text3: #5c5a57;
+    --accent: #e8d5b0;
+    --accent2: #c4a97a;
+    --gold: #d4a853;
+    --danger: #e05a5a;
+    --success: #5ec47a;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  html { background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+  body { min-height: 100vh; }
+
+  /* 本地字体栈，避免依赖 Google Fonts（国内被墙） */
+  body, input, textarea, select, button {
+    font-family: -apple-system, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', 'Noto Sans', sans-serif;
+  }
+  .logo-text, .result-title, .empty-title {
+    font-family: 'Georgia', 'Times New Roman', 'Songti SC', serif;
+  }
+
+  .app-wrapper { display: grid; grid-template-columns: 420px 1fr; min-height: 100vh; }
+
+  .panel-left {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    padding: 2rem;
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+  }
+
+  .panel-right {
+    background: var(--bg);
+    padding: 2rem 2.5rem;
+    overflow-y: auto;
+  }
+
+  .app-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2rem;
+  }
+  .logo-mark {
+    width: 32px; height: 32px;
+    background: var(--gold);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: #1a1200;
+  }
+  .logo-text {
+    font-size: 17px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .logo-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .form-section { margin-bottom: 1.5rem; }
+  .section-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-label svg { opacity: 0.5; }
+
+  .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.5rem; }
+  input[type=file].hidden-file { display: none; }
+  .upload-zone {
+    aspect-ratio: 1;
+    border: 1px dashed var(--border2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--bg3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .upload-zone:hover { border-color: var(--accent2); background: rgba(212,168,83,0.04); }
+  .upload-zone-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius); display: none; }
+  .upload-zone .overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    opacity: 0; transition: opacity 0.2s;
+    font-size: 12px; color: var(--text); border-radius: var(--radius);
+    pointer-events: none;
+  }
+  .upload-zone:hover .overlay { opacity: 1; pointer-events: all; }
+  .upload-zone .overlay button {
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    color: var(--text); font-size: 12px; padding: 5px 14px; border-radius: 6px;
+    cursor: pointer; font-family: inherit; pointer-events: all;
+  }
+  .upload-zone .overlay button:hover { background: rgba(255,255,255,0.25); }
+  .upload-placeholder { text-align: center; }
+  .upload-icon { font-size: 22px; margin-bottom: 4px; opacity: 0.3; }
+  .upload-lbl { font-size: 12px; color: var(--text3); }
+  .upload-sublbl { font-size: 11px; color: var(--text3); opacity: 0.6; margin-top: 2px; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--text3); margin-bottom: 5px; letter-spacing: 0.02em; }
+  .field input, .field textarea, .field select {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--border2); }
+  .field textarea { resize: vertical; min-height: 68px; line-height: 1.5; }
+  .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235c5a57' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; cursor: pointer; }
+  .field input::placeholder, .field textarea::placeholder { color: var(--text3); opacity: 0.6; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .shot-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .shot-counter { display: flex; align-items: center; gap: 8px; }
+  .shot-counter-btn {
+    width: 26px; height: 26px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text2); font-size: 16px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, color 0.15s; line-height: 1;
+  }
+  .shot-counter-btn:hover { border-color: var(--border2); color: var(--text); }
+  .shot-counter-val { font-size: 14px; font-weight: 500; min-width: 20px; text-align: center; }
+  .random-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); cursor: pointer; }
+  .random-toggle input { accent-color: var(--gold); cursor: pointer; }
+
+  .shots-list { display: flex; flex-direction: column; gap: 6px; }
+  .shot-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .shot-idx {
+    width: 22px; height: 22px;
+    background: rgba(212,168,83,0.1);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 500; color: var(--gold);
+    flex-shrink: 0;
+  }
+  .shot-row input[type=number] {
+    width: 56px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 13px;
+    padding: 5px 8px; outline: none; font-family: inherit;
+  }
+  .shot-row input[type=number]:focus { border-color: var(--border2); }
+  .shot-row .sec-lbl { font-size: 12px; color: var(--text3); }
+  .shot-row select {
+    flex: 1; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text2); font-size: 12px;
+    padding: 5px 28px 5px 8px; outline: none; cursor: pointer;
+    font-family: inherit; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235c5a57' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+  }
+  .shot-random-lbl { flex: 1; font-size: 12px; color: var(--text3); font-style: italic; }
+
+  .total-bar {
+    margin-top: 10px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--text3);
+  }
+  .total-track { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .total-fill { height: 100%; background: var(--gold); border-radius: 2px; transition: width 0.25s; }
+  .total-fill.over { background: var(--danger); }
+  .total-val { font-weight: 500; font-size: 13px; min-width: 36px; }
+  .total-val.ok { color: var(--gold); }
+  .total-val.over { color: var(--danger); }
+
+  .btn-generate {
+    width: 100%; margin-top: 1.5rem;
+    background: var(--gold);
+    color: #1a1200;
+    border: none; border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 14px; font-weight: 500;
+    padding: 13px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.02em;
+  }
+  .btn-generate:hover { opacity: 0.88; }
+  .btn-generate:active { transform: scale(0.99); }
+  .btn-generate:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .result-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 2rem;
+  }
+  .result-title {
+    font-size: 28px;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .result-subtitle { font-size: 13px; color: var(--text3); margin-top: 4px; }
+  .result-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn-sm {
+    padding: 7px 14px; font-size: 12px; font-family: inherit;
+    border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
+    border: 1px solid var(--border2); background: transparent; color: var(--text2);
+    letter-spacing: 0.02em;
+  }
+  .btn-sm:hover { background: var(--bg3); color: var(--text); }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 60vh; text-align: center; gap: 12px;
+  }
+  .empty-icon { font-size: 48px; opacity: 0.15; }
+  .empty-title { font-size: 22px; color: var(--text2); }
+  .empty-desc { font-size: 13px; color: var(--text3); max-width: 280px; line-height: 1.7; }
+
+  .loading-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 60vh; gap: 16px;
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 2px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; color: var(--text3); }
+  .loading-dots::after {
+    content: '';
+    display: inline-block;
+    width: 1.2em;
+    text-align: left;
+    animation: dotAnim 1.2s infinite steps(4);
+  }
+  @keyframes dotAnim {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+  }
+
+  .script-intro {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 1.5rem;
+    font-size: 13px;
+    color: var(--text2);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .script-intro-dot { width: 6px; height: 6px; background: var(--gold); border-radius: 50%; flex-shrink: 0; }
+
+  .shot-cards { display: flex; flex-direction: column; gap: 14px; }
+  .shot-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .shot-card:hover { border-color: var(--border2); }
+  .shot-card-top {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+  .shot-pill {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.05em;
+    padding: 3px 10px; border-radius: 20px;
+    background: rgba(212,168,83,0.12); color: var(--gold);
+  }
+  .shot-type-lbl { font-size: 13px; color: var(--text2); flex: 1; }
+  .shot-dur { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 4px; }
+
+  .shot-card-body { padding: 14px 16px; }
+  .lang-section { margin-bottom: 12px; }
+  .lang-section:last-child { margin-bottom: 0; }
+  .lang-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .lang-tag {
+    font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text3);
+  }
+  .lang-btns { display: flex; gap: 4px; }
+  .btn-micro {
+    padding: 3px 8px; font-size: 11px; border-radius: 5px; cursor: pointer;
+    background: transparent; border: 1px solid var(--border); color: var(--text3);
+    font-family: inherit; transition: all 0.15s;
+  }
+  .btn-micro:hover { border-color: var(--border2); color: var(--text); }
+  .content-block {
+    font-size: 14px; line-height: 1.65; color: var(--text);
+    padding: 10px 12px;
+    background: var(--bg3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    user-select: text;
+    white-space: pre-wrap; word-break: break-word;
+    min-height: 52px;
+    cursor: text;
+    transition: border-color 0.15s;
+  }
+  .content-block:hover { border-color: var(--border); }
+  .content-block:empty::before { content: attr(data-placeholder); color: var(--text3); opacity: 0.5; }
+
+  .error-box {
+    background: rgba(224,90,90,0.08);
+    border: 1px solid rgba(224,90,90,0.2);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px; color: #f08080;
+    margin-bottom: 1rem;
+  }
+
+  .toast {
+    position: fixed; bottom: 2rem; right: 2rem;
+    background: var(--text); color: var(--bg);
+    padding: 9px 16px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    opacity: 0; transform: translateY(8px);
+    transition: all 0.2s; pointer-events: none;
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* 移动端适配 */
+  @media (max-width: 800px) {
+    .app-wrapper { grid-template-columns: 1fr; }
+    .panel-left { position: static; max-height: none; }
+    .panel-right { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-wrapper">
+  <div class="panel-left">
+    <div class="app-logo">
+      <div class="logo-mark">✦</div>
+      <div>
+        <div class="logo-text">ScriptAI</div>
+        <div class="logo-sub">Video Script Generator</div>
+      </div>
+    </div>
+
+    <div class="form-section" style="margin-bottom:1.2rem">
+      <div class="field" style="margin-bottom:0">
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          <span>DeepSeek API Key</span>
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" style="font-size:11px;color:var(--gold);text-decoration:none;opacity:0.8">获取 Key →</a>
+        </label>
+        <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off" style="font-family:monospace;font-size:13px;letter-spacing:0.03em">
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="4" cy="4.5" r="1" fill="currentColor"/><path d="M1 8l3-3 2.5 2.5L9 5l2 3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        图片素材
+      </div>
+      <div class="upload-row">
+        <div>
+          <input type="file" id="productFileInput" class="hidden-file" accept="image/*">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:5px;letter-spacing:0.02em">产品图片</div>
+          <div class="upload-zone" data-type="product">
+            <img class="upload-zone-img">
+            <div class="upload-placeholder">
+              <div class="upload-icon">📦</div>
+              <div class="upload-lbl">产品图</div>
+              <div class="upload-sublbl">点击上传</div>
+            </div>
+            <div class="overlay"><button data-action="change" data-target="productFileInput">🔄 更换图片</button></div>
+          </div>
+        </div>
+        <div>
+          <input type="file" id="firstFrameFileInput" class="hidden-file" accept="image/*">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:5px;letter-spacing:0.02em">视频首帧</div>
+          <div class="upload-zone" data-type="firstFrame">
+            <img class="upload-zone-img">
+            <div class="upload-placeholder">
+              <div class="upload-icon">🎬</div>
+              <div class="upload-lbl">首帧图</div>
+              <div class="upload-sublbl">点击上传</div>
+            </div>
+            <div class="overlay"><button data-action="change" data-target="firstFrameFileInput">🔄 更换图片</button></div>
+          </div>
+          <div class="field" style="margin-top:6px;display:none" id="firstFrameDescField">
+            <label>首帧画面描述 <span style="opacity:0.5">（选填，帮助 AI 衔接第一镜）</span></label>
+            <textarea id="firstFrameDesc" placeholder="例：白色桌面上一个金色包装盒，暖色灯光从左上角打下来…"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2h8v8H2z" stroke="currentColor" stroke-width="1.2" rx="1"/><path d="M4 5h4M4 7h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        产品信息
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>中文名称</label>
+          <input type="text" id="nameCN" placeholder="例：星云香水">
+        </div>
+        <div class="field">
+          <label>英文名称</label>
+          <input type="text" id="nameEN" placeholder="例：Galaxy Scent">
+        </div>
+      </div>
+      <div class="field">
+        <label>产品概述 <span style="opacity:0.5">（可选）</span></label>
+        <textarea id="overview" placeholder="材质、风格、卖点、目标用户等，描述越详细脚本越精准…"></textarea>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 3V2a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2"/></svg>
+        分镜设置
+      </div>
+      <div class="shot-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--text3)">镜头数</span>
+          <div class="shot-counter">
+            <button class="shot-counter-btn" data-action="decShots">−</button>
+            <span class="shot-counter-val" id="shotsVal">3</span>
+            <button class="shot-counter-btn" data-action="incShots">+</button>
+          </div>
+        </div>
+        <label class="random-toggle">
+          <input type="checkbox" id="randomSec">
+          随机秒数
+        </label>
+      </div>
+      <div class="shots-list" id="shotsList"></div>
+      <div class="total-bar">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="opacity:.5"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3l2 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        <div class="total-track"><div class="total-fill" id="totalFill"></div></div>
+        <span class="total-val ok" id="totalVal">—</span>
+      </div>
+    </div>
+
+    <button id="genBtn" class="btn-generate">✦ 生成脚本</button>
+  </div>
+
+  <div class="panel-right" id="rightPanel">
+    <div class="empty-state">
+      <div class="empty-icon">✦</div>
+      <div class="empty-title">开始创作</div>
+      <div class="empty-desc">填写产品信息，设置分镜参数<br>点击「生成脚本」即可获得 AI 短视频脚本</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== 状态 =====
+  let productB64 = null, productMime = 'image/jpeg';
+  let firstFrameB64 = null, firstFrameMime = 'image/jpeg';
+  let lastData = null;
+  let numShots = 3;
+
+  // ===== DOM 引用 =====
+  const $ = (id) => document.getElementById(id);
+  const apiKeyEl = $('apiKey');
+  const nameCNEl = $('nameCN');
+  const nameENEl = $('nameEN');
+  const overviewEl = $('overview');
+  const randomSecEl = $('randomSec');
+  const shotsValEl = $('shotsVal');
+  const shotsListEl = $('shotsList');
+  const totalFillEl = $('totalFill');
+  const totalValEl = $('totalVal');
+  const genBtnEl = $('genBtn');
+  const rightPanelEl = $('rightPanel');
+  const toastEl = $('toast');
+  const firstFrameDescEl = $('firstFrameDesc');
+  const firstFrameDescFieldEl = $('firstFrameDescField');
+
+  // ===== 工具函数 =====
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(function(){ toastEl.classList.remove('show'); }, 2200);
+  }
+
+  /** 安全的剪贴板复制，兼容 file:// 协议 */
+  async function copyToClipboard(text, msg) {
+    try {
+      // 优先使用现代 API（仅 HTTPS / localhost 可用，file:// 会失败）
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      // file:// 协议回退到传统 execCommand
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (e2) {
+        showToast('复制失败，请手动选中文字后按 Cmd/Ctrl+C');
+        return;
+      }
+    }
+    showToast(msg || '已复制');
+  }
+
+  // ===== 图片上传 =====
+  function handleUpload(file, type) {
+    if (!file) return;
+    const mime = file.type || 'image/jpeg';
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const b64 = ev.target.result.split(',')[1];
+      const src = ev.target.result;
+      if (type === 'product') {
+        productB64 = b64; productMime = mime;
+        setPreview('product', src);
+      } else {
+        firstFrameB64 = b64; firstFrameMime = mime;
+        setPreview('firstFrame', src);
+        firstFrameDescFieldEl.style.display = 'block';
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function setPreview(type, src) {
+    const zone = document.querySelector(`.upload-zone[data-type="${type}"]`);
+    if (!zone) return;
+    const img = zone.querySelector('.upload-zone-img');
+    const ph = zone.querySelector('.upload-placeholder');
+    img.src = src;
+    img.style.display = 'block';
+    ph.style.display = 'none';
+    zone.style.borderStyle = 'solid';
+  }
+
+  // ===== 分镜渲染 =====
+  function changeShots(d) {
+    numShots = Math.min(8, Math.max(1, numShots + d));
+    shotsValEl.textContent = numShots;
+    renderShots();
+  }
+
+  function renderShots() {
+    const isRandom = randomSecEl.checked;
+    const prev = [];
+    document.querySelectorAll('.shot-row').forEach((r,i) => {
+      prev[i] = {
+        sec: r.querySelector('input[type=number]')?.value || '',
+        type: r.querySelector('select')?.value || 'auto'
+      };
+    });
+    shotsListEl.innerHTML = '';
+    const types = [
+      ['auto','自动判断'],['product','产品特写'],['scene','场景展示'],
+      ['detail','细节展示'],['lifestyle','生活方式'],['cta','行动引导']
+    ];
+    for (let i = 0; i < numShots; i++) {
+      const p = prev[i] || {};
+      const row = document.createElement('div');
+      row.className = 'shot-row';
+      const opts = types.map(([v,l]) => `<option value="${v}"${(p.type||'auto')===v?' selected':''}>${l}</option>`).join('');
+      if (isRandom) {
+        row.innerHTML = `<div class="shot-idx">${i+1}</div><span class="shot-random-lbl">随机时长</span><select onchange="window.__updateTotal()">${opts}</select>`;
+      } else {
+        row.innerHTML = `<div class="shot-idx">${i+1}</div><input type="number" min="1" max="14" placeholder="秒" value="${p.sec||''}" oninput="window.__updateTotal()"><span class="sec-lbl">s</span><select onchange="window.__updateTotal()" style="flex:1">${opts}</select>`;
+      }
+      shotsListEl.appendChild(row);
+    }
+    updateTotal();
+  }
+
+  window.__updateTotal = updateTotal;
+
+  function updateTotal() {
+    const isRandom = randomSecEl.checked;
+    const v = totalValEl;
+    const f = totalFillEl;
+    if (isRandom) {
+      v.textContent = '随机'; v.className = 'total-val ok';
+      f.style.width = '45%'; f.className = 'total-fill'; return;
+    }
+    let t = 0;
+    document.querySelectorAll('.shot-row input[type=number]').forEach(el => { t += parseFloat(el.value)||0; });
+    t = Math.round(t);
+    v.textContent = t ? t+'s' : '—';
+    v.className = 'total-val ' + (t > 15 ? 'over' : 'ok');
+    f.style.width = Math.min(100,(t/15)*100)+'%';
+    f.className = 'total-fill ' + (t > 15 ? 'over' : '');
+  }
+
+  function getShotsData() {
+    const isRandom = randomSecEl.checked;
+    return Array.from(document.querySelectorAll('.shot-row')).map((r,i) => ({
+      index: i+1,
+      seconds: isRandom ? 'random' : (parseFloat(r.querySelector('input[type=number]')?.value) || 'random'),
+      type: r.querySelector('select')?.value || 'auto'
+    }));
+  }
+
+  // ===== 生成脚本 =====
+  async function generate() {
+    const nameCN = nameCNEl.value.trim();
+    const nameEN = nameENEl.value.trim();
+    const overview = overviewEl.value.trim();
+    const isRandom = randomSecEl.checked;
+    const shots = getShotsData();
+
+    if (!nameCN && !nameEN && !productB64) {
+      showToast('请至少填写产品名称或上传产品图片');
+      return;
+    }
+    if (!isRandom) {
+      let t = shots.reduce((a,s) => a + (s.seconds === 'random' ? 0 : s.seconds), 0);
+      if (t > 15) { showToast('总时长 ' + Math.round(t) + 's 超过15秒'); return; }
+    }
+
+    lastData = { nameCN, nameEN, overview, shots, isRandom };
+
+    const apiKey = apiKeyEl.value.trim();
+    if (!apiKey) { showToast('请先填写 DeepSeek API Key'); return; }
+
+    genBtnEl.disabled = true;
+    showLoading();
+
+    const typeMap = {auto:'自动',product:'产品特写',scene:'场景展示',detail:'细节展示',lifestyle:'生活方式',cta:'行动引导'};
+    const shotDesc = shots.map(s => '镜头' + s.index + '：' + (s.seconds === 'random' ? '随机秒数' : s.seconds + '秒') + '，' + (typeMap[s.type]||'自动')).join('\n');
+
+    const firstFrameDesc = firstFrameDescEl?.value?.trim() || '';
+
+    const promptText = 'You are a professional short-video script creator for AI video generators (Runway Gen-3, Sora, Kling). Return ONLY valid JSON, no markdown, no code blocks, no explanation.\n\nProduct: ' + (nameCN||'N/A') + ' / ' + (nameEN||'N/A') + '\nDescription: ' + (overview||'N/A') + '\nShot plan:\n' + shotDesc + '\n' + (isRandom ? 'Total duration: random, under 15s' : 'Total duration: under 15s') + (firstFrameDesc ? '\nIMPORTANT: Shot #1 must naturally connect from the provided video first frame. The first frame shows: ' + firstFrameDesc : '') + '\n\nFor each shot, provide:\n- **en** (English prompt): A detailed Runway-ready video prompt (80-120 words) describing scene composition, camera movement (运镜), lighting, atmosphere, subject action, and color palette\n- **zh** (中文提示词): 对应的中文描述（50-80字）\n- **camera**: Camera movement type in Chinese (e.g., 缓慢前推, 手持跟拍, 俯拍, 低角度推进, 甩镜头, 升降)\n- **transition**: How this shot transitions to the next (e.g., match cut, fade to black, whip pan, dissolve, quick cut) in English\n- **voiceover**: Natural American English product narration matching the shot duration (≈2.5 words per second). Highlight the product\'s key selling points based on the product name and description. Match the visual content of the shot. Use casual, conversational American English like you\'re talking to a friend. Do NOT count words — just write natural speech that fits the time.\n\nOutput JSON:\n{"title":"视频风格(5字内)","style":"整体视觉风格英文","shots":[{"index":1,"duration":数字,"type":"镜头类型","zh":"中文提示词","en":"Runway-ready English prompt","camera":"运镜方式","transition":"transition type","voiceover":"American English narration matching duration"}]}';
+
+    const messages = [{role:'user', content: promptText}];
+
+    try {
+      const body = JSON.stringify({
+        model:'deepseek-chat',
+        max_tokens:4096,
+        temperature:0.3,
+        seed:42,
+        messages
+      });
+
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization': 'Bearer ' + apiKey
+        },
+        body
+      });
+
+      const rawText = await res.text();
+
+      if (!res.ok) {
+        let errMsg = 'HTTP ' + res.status;
+        try {
+          const errData = JSON.parse(rawText);
+          errMsg = errData.error?.message || errMsg;
+        } catch(e) {}
+        throw new Error(errMsg);
+      }
+
+      let data;
+      try { data = JSON.parse(rawText); } catch(e) {
+        throw new Error('API 返回非 JSON 格式');
+      }
+
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error('API 返回内容为空');
+      }
+
+      let cleaned = content.trim();
+      cleaned = cleaned.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+      const braceStart = cleaned.indexOf('{');
+      const braceEnd = cleaned.lastIndexOf('}');
+      if (braceStart >= 0 && braceEnd > braceStart) {
+        cleaned = cleaned.slice(braceStart, braceEnd + 1);
+      }
+      if (!cleaned.startsWith('{')) {
+        throw new Error('AI 返回格式异常，请重试');
+      }
+      const parsed = JSON.parse(cleaned);
+      renderScript(parsed);
+    } catch(e) {
+      const msg = e.message || '请检查网络后重试';
+      showError('生成失败：' + msg);
+    } finally {
+      genBtnEl.disabled = false;
+    }
+  }
+
+  function showLoading() {
+    rightPanelEl.innerHTML = '<div class="loading-state"><div class="spinner"></div><div class="loading-text">正在生成脚本<span class="loading-dots"></span></div></div>';
+  }
+
+  function showError(msg) {
+    rightPanelEl.innerHTML = '<div style="padding:2rem 0"><div class="error-box">' + msg + '</div></div>';
+  }
+
+  // ===== 渲染结果 =====
+  function renderScript(data) {
+    window.__scriptData = data;
+    let html = '<div class="result-header"><div><div class="result-title">' + escHtml(data.title||'视频脚本') + '</div><div class="result-subtitle">' + (data.shots?.length||0) + ' 个分镜 · 中英对照</div></div><div class="result-actions"><button class="btn-sm" data-action="copyAll">📋 复制提示词</button><button class="btn-sm" data-action="copyVoiceovers">🎙 复制口播</button><button class="btn-sm" data-action="regenAll">重新生成</button></div></div>';
+
+    (data.shots||[]).forEach(shot => {
+      const typeLabel = shot.type||'';
+      html += '<div class="shot-card">';
+      html += '<div class="shot-card-top">';
+      html += '<span class="shot-pill">镜头 ' + shot.index + '</span>';
+      html += '<span class="shot-type-lbl">' + escHtml(typeLabel) + '</span>';
+      html += '<span class="shot-dur"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="opacity:.5"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3l2 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg> ' + shot.duration + 's</span>';
+      html += '</div>';
+      html += '<div class="shot-card-body">';
+      html += '<div class="lang-section" style="margin-bottom:8px"><div class="lang-header"><span class="lang-tag">🎥 运镜 · ' + escHtml(shot.camera||'—') + '</span><span class="lang-tag">↗ 转场 · ' + escHtml(shot.transition||'—') + '</span></div></div>';
+      // 中文
+      html += '<div class="lang-section"><div class="lang-header"><span class="lang-tag">🇨🇳 中文提示词</span><div class="lang-btns"><button class="btn-micro" data-action="copyText" data-target="zh-' + shot.index + '">复制</button><button class="btn-micro" data-action="regenShot" data-shot="' + shot.index + '" data-lang="zh">重写</button></div></div><div class="content-block" id="zh-' + shot.index + '" data-placeholder="中文提示词">' + escHtml(shot.zh||'') + '</div></div>';
+      // 英文
+      html += '<div class="lang-section"><div class="lang-header"><span class="lang-tag">🇺🇸 English Prompt for Runway</span><div class="lang-btns"><button class="btn-micro" data-action="copyText" data-target="en-' + shot.index + '">Copy</button><button class="btn-micro" data-action="regenShot" data-shot="' + shot.index + '" data-lang="en">Rewrite</button></div></div><div class="content-block" id="en-' + shot.index + '" data-placeholder="English prompt">' + escHtml(shot.en||'') + '</div></div>';
+      // 口播
+      html += '<div class="lang-section"><div class="lang-header"><span class="lang-tag">🎙 口播 (English · USA)</span><div class="lang-btns"><button class="btn-micro" data-action="copyText" data-target="vo-' + shot.index + '">复制</button><button class="btn-micro" data-action="regenVoiceover" data-shot="' + shot.index + '">重写</button></div></div><div class="content-block" style="font-style:italic;color:var(--accent)" id="vo-' + shot.index + '" data-placeholder="American English narration">' + escHtml(shot.voiceover||'') + '</div></div>';
+      html += '</div></div>';
+    });
+
+    rightPanelEl.innerHTML = html;
+  }
+
+  // ===== 事件委托处理所有按钮 =====
+  rightPanelEl.addEventListener('click', async function(e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (!action) return;
+
+    switch (action) {
+      case 'copyText': {
+        const targetId = btn.dataset.target;
+        const el = document.getElementById(targetId);
+        if (el) await copyToClipboard(el.textContent, '已复制');
+        break;
+      }
+      case 'copyAll': {
+        const blocks = document.querySelectorAll('.content-block');
+        const prompts = [];
+        blocks.forEach(b => {
+          if (b.id.startsWith('en-')) prompts.push(b.textContent);
+        });
+        await copyToClipboard(prompts.join('\n\n'), '已复制全部英文提示词');
+        break;
+      }
+      case 'copyVoiceovers': {
+        const blocks = document.querySelectorAll('.content-block');
+        const lines = [];
+        blocks.forEach(b => {
+          if (b.id.startsWith('vo-')) lines.push(b.textContent);
+        });
+        await copyToClipboard(lines.join('\n\n'), '已复制全部口播内容');
+        break;
+      }
+      case 'regenAll':
+        generate();
+        break;
+      case 'regenShot': {
+        const shotIdx = parseInt(btn.dataset.shot);
+        const lang = btn.dataset.lang;
+        await regenShot(shotIdx, lang);
+        break;
+      }
+      case 'regenVoiceover': {
+        const shotIdx = parseInt(btn.dataset.shot);
+        await regenVoiceover(shotIdx);
+        break;
+      }
+    }
+  });
+
+  async function regenShot(index, lang) {
+    const el = document.getElementById(lang + '-' + index);
+    if (!el || !lastData) return;
+    const orig = el.textContent;
+    el.textContent = '重新生成中…';
+    el.style.opacity = '0.45';
+
+    const langLabel = lang === 'zh'
+      ? '中文（50-80字，含构图光线氛围运镜）'
+      : 'English Runway prompt (80-120 words with camera movement, lighting, atmosphere, subject action)';
+
+    const prompt = '产品：' + (lastData.nameCN||'') + ' ' + (lastData.nameEN||'') + '\n概述：' + (lastData.overview||'') + '\n\n为第 ' + index + ' 个分镜重新生成' + langLabel + '的提示词。要求：\n- 详细描述构图、光线、色彩氛围、运镜方式、主体动作\n- 如果是英文提示词，需达到 Runway Gen-3 可用级别（80-120词完整场景描述）\n- 只输出提示词本身';
+
+    try {
+      const apiKey = apiKeyEl.value.trim();
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization': 'Bearer ' + apiKey
+        },
+        body:JSON.stringify({model:'deepseek-chat', max_tokens:1000, temperature:0.3, seed:42, messages:[{role:'user',content:prompt}]})
+      });
+      const rawText = await res.text();
+      if (!res.ok) throw new Error();
+      const data = JSON.parse(rawText);
+      el.textContent = data.choices?.[0]?.message?.content?.trim() || orig;
+    } catch {
+      el.textContent = orig;
+      showToast('重写失败，请重试');
+    }
+    el.style.opacity = '1';
+  }
+
+  async function regenVoiceover(index) {
+    const el = document.getElementById('vo-' + index);
+    if (!el || !lastData) return;
+    const orig = el.textContent;
+    el.textContent = '生成中…';
+    el.style.opacity = '0.45';
+
+    const shot = lastData.shots.find(s => s.index === index);
+    const dur = (shot?.seconds && shot.seconds !== 'random') ? shot.seconds : 5;
+
+    const prompt = 'Product: ' + (lastData.nameCN||'') + ' ' + (lastData.nameEN||'') + '\nDescription: ' + (lastData.overview||'') + '\n\nWrite a ' + dur + '-second American English voiceover narration for shot #' + index + ' of this product video.\n- Natural, casual American conversational tone (talk to a friend, not a script)\n- About ' + Math.round(dur*2.5) + ' words total (≈2.5 words/sec)\n- Highlight key selling points based on the product name and description\n- Match what would be shown visually in this shot\n- Output ONLY the voiceover text, no quotes, no labels';
+
+    try {
+      const apiKey = apiKeyEl.value.trim();
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization': 'Bearer ' + apiKey
+        },
+        body:JSON.stringify({model:'deepseek-chat', max_tokens:300, temperature:0.4, messages:[{role:'user',content:prompt}]})
+      });
+      const rawText = await res.text();
+      if (!res.ok) throw new Error();
+      const data = JSON.parse(rawText);
+      el.textContent = data.choices?.[0]?.message?.content?.trim() || orig;
+    } catch {
+      el.textContent = orig;
+      showToast('口播生成失败，请重试');
+    }
+    el.style.opacity = '1';
+  }
+
+  // ===== 事件绑定 =====
+  function init() {
+    // 上传
+    document.querySelectorAll('.upload-zone').forEach(zone => {
+      const type = zone.dataset.type;
+      const inputId = type === 'product' ? 'productFileInput' : 'firstFrameFileInput';
+      const input = document.getElementById(inputId);
+
+      // 点击区域触发文件选择
+      zone.addEventListener('click', function(e) {
+        const overlayBtn = e.target.closest('.overlay button');
+        if (overlayBtn) return; // 让 overlay 按钮处理
+        input.click();
+      });
+
+      input.addEventListener('change', function(e) {
+        handleUpload(e.target.files[0], type);
+        // 允许重复选同一文件
+        e.target.value = '';
+      });
+
+      // overlay 内的按钮
+      zone.querySelector('.overlay button')?.addEventListener('click', function(e) {
+        e.stopPropagation();
+        input.click();
+      });
+    });
+
+    // 镜头增减按钮
+    document.querySelector('[data-action="incShots"]')?.addEventListener('click', () => changeShots(1));
+    document.querySelector('[data-action="decShots"]')?.addEventListener('click', () => changeShots(-1));
+
+    // 随机秒数切换
+    randomSecEl.addEventListener('change', renderShots);
+
+    // 生成按钮
+    genBtnEl.addEventListener('click', generate);
+
+    // 初始渲染
+    renderShots();
+  }
+
+  // 页面加载完成后初始化
+  if (document.readyState === 'complete') {
+    init();
+  } else {
+    window.addEventListener('load', init);
+  }
+
+})();
+</script>
+</body>
+</html>
