@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Mac Chinese-to-English Input Assistant"
+  short_description: "Build and install a private Mac Chinese-to-English input tool"
+  default_prompt: "Use $build-mac-zh-en-input-assistant to build and install a privacy-first Mac Chinese-to-English input assistant."
